@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MAGHNI NAZIH | Secure Checkout</title>
+    <script src="https://js.stripe.com/v3/"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        :root { --gold: #d4af37; --bg: #000000; }
+        body { background: var(--bg); color: #e5e7eb; font-family: 'Tajawal', sans-serif; margin: 0; }
+        #interfaceOne { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; position: relative; }
+        .form-container { background: #0a0a0a; width: 100%; max-width: 400px; padding: 40px 30px; border-radius: 30px; border: 1px solid #1a1a1a; text-align: center; box-shadow: 0 10px 50px rgba(0,0,0,0.5); }
+        .custom-input { width: 100%; background: #141414; border: 1.5px solid #262626; border-radius: 14px; padding: 15px; color: #fff; text-align: center; outline: none; margin-bottom: 20px; font-size: 18px; font-weight: bold; }
+        .btn-pay { width: 100%; padding: 18px; background: linear-gradient(45deg, #b8860b, var(--gold)); border-radius: 16px; color: #000; font-weight: 900; cursor: pointer; border: none; font-size: 18px; transition: 0.3s; }
+        .btn-pay:hover { transform: scale(1.02); box-shadow: 0 0 20px rgba(212, 175, 55, 0.3); }
+        .admin-trigger-container { position: absolute; bottom: 40px; width: 100%; display: flex; justify-content: center; }
+        .admin-btn { background: #111; border: 1px solid var(--gold); color: var(--gold); padding: 10px 30px; border-radius: 50px; font-weight: bold; cursor: pointer; opacity: 0.5; transition: 0.3s; }
+        .admin-btn:hover { opacity: 1; background: var(--gold); color: #000; }
+        #interfaceTwo { display: none; padding: 25px; background: #050505; min-height: 100vh; }
+        .glass-box { background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 20px; padding: 20px; }
+    </style>
+</head>
+<body>
+    <div id="interfaceOne">
+        <div class="form-container">
+            <div class="mb-8">
+                <h1 class="text-3xl font-black italic text-white uppercase">MAGHNI NAZIH</h1>
+                <p class="text-amber-500 text-[10px] tracking-[4px] uppercase">Secure Payment Gateway</p>
+            </div>
+            <label class="block text-gray-500 text-xs mb-2 italic">أدخل المبلغ المراد دفعه (€)</label>
+            <input type="number" id="mainAmt" class="custom-input" placeholder="0.00" step="0.01">
+            <button class="btn-pay" onclick="redirectToStripe()">دفع الآن عبر STRIPE</button>
+            <div class="mt-6 flex justify-center gap-4 opacity-30 italic text-[10px]">Secure by Aotar Biz</div>
+        </div>
+        <div class="admin-trigger-container">
+            <button class="admin-btn" onclick="openAdmin()">فتح لوحة المبيعات</button>
+        </div>
+    </div>
+    <div id="interfaceTwo">
+        <div class="max-w-6xl mx-auto">
+            <div class="flex justify-between items-center mb-8">
+                <h1 class="text-2xl font-black italic uppercase text-white">MAGHNI NAZIH <span class="text-amber-500 text-sm">ADMIN</span></h1>
+                <button onclick="location.reload()" class="text-xs bg-red-900/20 text-red-500 px-4 py-2 rounded-full border border-red-900/30 font-bold">خروج</button>
+            </div>
+            <div id="partnerStatus" class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8"></div>
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                <div class="lg:col-span-4 glass-box">
+                    <h2 class="text-amber-500 font-bold mb-4 text-xs tracking-widest uppercase">إدارة العمليات</h2>
+                    <input type="number" id="vAmt" class="custom-input !text-sm mb-4" placeholder="المبلغ">
+                    <div class="grid grid-cols-2 gap-2 mb-4">
+                        <button onclick="addManual('دخل')" class="bg-emerald-600/20 text-emerald-500 py-3 rounded-xl font-bold text-xs">إضافة دخل</button>
+                        <button onclick="addManual('مصروف')" class="bg-orange-600/20 text-orange-500 py-3 rounded-xl font-bold text-xs">إضافة مصروف</button>
+                    </div>
+                    <div class="pt-4 border-t border-white/5">
+                        <select id="pName" class="custom-input !text-xs mb-2">
+                            <option>المسدد</option><option>MAGHNI NAZIH (ZYRA)</option><option>أبو عمر</option><option>أبو محمد</option>
+                        </select>
+                        <button onclick="doWithdraw()" class="w-full bg-blue-600/20 text-blue-500 py-3 rounded-xl font-bold text-xs">تسجيل سحب لشريك</button>
+                    </div>
+                </div>
+                <div class="lg:col-span-8 glass-box">
+                    <h2 class="text-gray-400 font-bold mb-4 text-xs italic">سجل العمليات الأخير</h2>
+                    <div id="fullLog" class="space-y-2 max-h-[500px] overflow-y-auto pr-2"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script>
+        const stripe = Stripe('pk_live_51HqLsxHklbZ020FaOz1QqFXNPvkVwzroy723VBjsRg0j4WWIcD4eJBU5pdp5BDUPrbPGd06rU5WGOGlzqWF9Amqf001aYLDVKo');
+        async function redirectToStripe() {
+            const amount = document.getElementById('mainAmt').value;
+            if(!amount || amount <= 0) { alert("يرجى تحديد المبلغ"); return; }
+            try {
+                const response = await fetch('/api/create-checkout', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ amount: amount })
+                });
+                const session = await response.json();
+                if (session.id) {
+                    stripe.redirectToCheckout({ sessionId: session.id });
+                } else {
+                    alert("خطأ في الاتصال بالسيرفر. تأكد من رفع ملفات api بشكل صحيح.");
+                }
+            } catch (e) { alert("حدث خطأ تقني."); }
+        }
+        const SHARES = { "المسدد": 0.40, "MAGHNI NAZIH (ZYRA)": 0.30, "أبو عمر": 0.15, "أبو محمد": 0.15 };
+        let db = JSON.parse(localStorage.getItem('MN_V5_LIVE')) || {
+            partners: { "المسدد": {e:0, w:0}, "MAGHNI NAZIH (ZYRA)": {e:0, w:0}, "أبو عمر": {e:0, w:0}, "أبو محمد": {e:0, w:0} },
+            log: [], totalExp: 0
+        };
+        function openAdmin() { if(prompt("رمز الدخول:") === "1234") { document.getElementById('interfaceOne').style.display='none'; document.getElementById('interfaceTwo').style.display='block'; ui(); } }
+        function addManual(type) {
+            const a = parseFloat(document.getElementById('vAmt').value); if(!a) return;
+            if(type==='دخل') {
+                const net = a * 0.80;
+                for(let p in SHARES) db.partners[p].e += (net * SHARES[p]);
+                db.log.unshift({ a, type, d: new Date().toLocaleString() });
+            } else { db.totalExp += a; db.log.unshift({ a, type, d: new Date().toLocaleString() }); }
+            save();
+        }
+        function doWithdraw() {
+            const a = parseFloat(document.getElementById('vAmt').value); const p = document.getElementById('pName').value;
+            if(!a) return; db.partners[p].w += a;
+            db.log.unshift({ a, p, type: 'سحب', d: new Date().toLocaleString() }); save();
+        }
+        function save() { localStorage.setItem('MN_V5_LIVE', JSON.stringify(db)); document.getElementById('vAmt').value=''; ui(); }
+        function ui() {
+            const ps = document.getElementById('partnerStatus'); ps.innerHTML = '';
+            for(let p in db.partners) {
+                const bal = db.partners[p].e - db.partners[p].w;
+                ps.innerHTML += `<div class="stat-card glass-box text-center p-4">
+                    <p class="text-[9px] text-gray-500 uppercase mb-1">${p}</p>
+                    <h3 class="font-black text-amber-500 text-lg">${bal.toFixed(2)} €</h3>
+                </div>`;
+            }
+            const log = document.getElementById('fullLog'); log.innerHTML = '';
+            db.log.forEach(l => {
+                const clr = l.type==='دخل'?'text-emerald-500':'text-red-500';
+                log.innerHTML += `<div class="bg-white/5 p-4 rounded-xl flex justify-between items-center text-xs">
+                    <div><span class="font-bold ${clr}">${l.a} €</span> <span class="opacity-30 ml-2">| ${l.type} ${l.p?l.p:''}</span></div>
+                    <span class="opacity-20 font-mono text-[9px]">${l.d}</span>
+                </div>`;
+            });
+        }
+    </script>
+</body>
+</html>
